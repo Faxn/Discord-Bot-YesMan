@@ -1,6 +1,10 @@
 
+# Based on https://github.com/rapptz/discord.py
 
-import os, sys
+import os, sys, random
+import util
+
+
 #make sure the config file exists
 if(not os.path.exists('config.py')):
     with open('config.py', 'w') as config:
@@ -8,8 +12,10 @@ if(not os.path.exists('config.py')):
         print("Put your client id and bot token from developer.discordapp.com in config.py")
         sys.exit(1)
 
+
 import discord
-#import asyncio
+from discord.http import HTTPClient
+import asyncio
 
 from discord.ext import commands
 
@@ -23,11 +29,28 @@ async def on_ready():
     print(bot.user.id)
     print('------')
 
-@bot.event
+@bot.listen('on_message')
 async def on_message(message):
     if(message.author.id != bot.user.id):
-        await bot.send_message(message.channel, 'I agree')
+        if(not '!' in message.content):
+            await bot.send_message(message.channel, 'I agree')
+    
 
+@bot.command(pass_context = True)
+@asyncio.coroutine
+async def slurp(ctx):
+    bot = ctx.bot
+    channel = ctx.message.channel
+    
+    messages = await util.get_all_messages(bot, channel)
+    await bot.send_message(channel, "got %d messages." % (len(messages)))
+    
+    with open("response.json", 'w') as outfile:
+        import json
+        outfile.write(json.dumps(messages))
+    
+    
+    return
 
 
 
