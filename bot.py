@@ -3,6 +3,7 @@
 
 import os, sys, random
 import util
+import asyncio
 
 
 #make sure the config file exists
@@ -14,9 +15,8 @@ if(not os.path.exists('config.py')):
 
 
 import discord
+from discord.enums import ChannelType
 from discord.http import HTTPClient
-import asyncio
-
 from discord.ext import commands
 
 # A dice bot for use with Discord
@@ -36,7 +36,7 @@ async def on_message(message):
             await bot.send_message(message.channel, 'I agree')
     
 
-@bot.command(pass_context = True)
+@bot.command(aliases=[], pass_context = True)
 @asyncio.coroutine
 async def slurp(ctx):
     bot = ctx.bot
@@ -45,13 +45,52 @@ async def slurp(ctx):
     messages = await util.get_all_messages(bot, channel)
     await bot.send_message(channel, "got %d messages." % (len(messages)))
     
-    with open("response.json", 'w') as outfile:
-        import json
-        outfile.write(json.dumps(messages))
+    return
+
+@bot.command(aliases=[], pass_context = True)
+@asyncio.coroutine
+async def archive(ctx, channel_p : str):
+    bot = ctx.bot
     
+    channel = bot.get_channel(channel_p)
+    
+    messages = await util.get_all_messages(bot, channel)
+    await bot.send_message(channel, "got %d messages." % (len(messages)))
     
     return
 
+
+@bot.command(aliases=[], pass_context = True)
+@asyncio.coroutine
+async def show_channels(ctx):
+    bot = ctx.bot
+    
+    channels = {}
+    out=""
+    
+    for channel in bot.get_all_channels():
+        channels[channel.name] = channel
+        out += "%s\t%s/n" % (channel.id, channel.name)
+    print(out)
+    print(repr(channels))
+    await bot.send_message(ctx.message.channel, out)
+    
+    return
+
+
+@bot.command(pass_context = True)
+@asyncio.coroutine
+async def archive_all(ctx):
+    bot = ctx.bot
+    for channel in bot.get_all_channels():
+        print("%s:%s, %s" % ( channel.id, channel.name, channel.type))
+        if (channel.type is ChannelType.text and 
+        not os.path.exists(util.get_storage(channel))):
+            try:
+                messages = await util.get_all_messages(bot, channel)
+                print("got %d message" % (len(messages)))
+            except Exception as e:
+                print (repr(e))
 
 
 import config
