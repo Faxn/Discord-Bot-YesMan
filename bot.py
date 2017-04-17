@@ -131,6 +131,24 @@ async def speak(ctx):
     except:
         pass
 
+## Util Command
+########################################################################
+@bot.command(pass_context=True)
+@asyncio.coroutine
+async def notify(ctx, delay:int):
+    user = ctx.message.author
+    ack = await ctx.bot.send_message(ctx.message.channel, "I will notify you in %d seconds." % (delay))
+    await asyncio.sleep(delay)
+    await ctx.bot.send_message(ctx.message.channel, "Hey %s! I'm notifying you!" % (user.mention) )
+    try:
+        await bot.delete_message(ctx.message)
+        await bot.delete_message(ack)
+    #todo actually catch or avoid this error to keep the logs clean.
+    except discord.ext.commands.errors.CommandInvokeError:
+        pass
+    
+    
+    
 
 
 import config
