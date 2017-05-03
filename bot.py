@@ -26,28 +26,17 @@ async def on_message(message):
             await bot.send_message(message.channel, 'I agree')
     
 
+import infodump.infodump
+infodump.infodump.setup(bot)
+
 import archiver.archiver
-bot.add_cog(archiver.archiver.Archiver)
+archiver.archiver.setup(bot)
 
 import mimic.mimic
-bot.add_cog(mimic.mimic.Mimic)
+mimic.mimic.setup(bot)
 
-
-## Util Command
-########################################################################
-@bot.command(pass_context=True)
-@asyncio.coroutine
-async def notify(ctx, delay:int):
-    user = ctx.message.author
-    ack = await ctx.bot.send_message(ctx.message.channel, "I will notify you in %d seconds." % (delay))
-    await asyncio.sleep(delay)
-    await ctx.bot.send_message(ctx.message.channel, "Hey %s! I'm notifying you!" % (user.mention) )
-    try:
-        await bot.delete_message(ctx.message)
-        await bot.delete_message(ack)
-    #todo actually catch or avoid this error to keep the logs clean.
-    except discord.ext.commands.errors.CommandInvokeError:
-        pass
+import notifier.notifier
+notifier.notifier.setup(bot)
 
 
 def main():
