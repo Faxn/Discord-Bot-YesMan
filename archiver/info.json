@@ -1,0 +1,10 @@
+{
+    "AUTHOR" : "Faxn",
+    "INSTALL_MSG" : "'archiver' installed `[p]archive_all` is probably your next step.",
+    "NAME" : "Archive",
+    "SHORT" : "Commands to download messages off a discord server for safe keeping.",
+    "DESCRIPTION" : "Commands to download messages off a discord server for safe keeping.",
+    "TAGS" : ["archive", "archiver", "backup"],
+    "REQUIREMENTS" : ["tinydb"],
+    "HIDDEN" : false
+}

@@ -1,0 +1,10 @@
+{
+    "AUTHOR" : "Faxn",
+    "INSTALL_MSG" : "Ready to roll for iniative! `[p]rgr 1d20+2`",
+    "NAME" : "RGR",
+    "SHORT" : "Commands to roll dice with a language parser.",
+    "DESCRIPTION" : "Commands to roll dice with a language parser. This is more than your old regex based roller. `4d20+2` is fine but so is `1d6+1d8-3`.",
+    "TAGS" : ["dice", "roller", "rgr", "DnD", "random"],
+    "REQUIREMENTS" : ['ply'],
+    "HIDDEN" : false
+}

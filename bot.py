@@ -9,8 +9,7 @@ import discord
 from discord.enums import ChannelType
 from discord.ext import commands
 
-
-
+sys.path.insert(0, "lib")
 bot = commands.Bot(command_prefix='!', description="An agreeable bot.")
 
 
@@ -37,6 +36,9 @@ mimic.mimic.setup(bot)
 
 import notifier.notifier
 notifier.notifier.setup(bot)
+
+import rgrcog.rgrcog
+rgrcog.rgrcog.setup(bot)
 
 
 def main():

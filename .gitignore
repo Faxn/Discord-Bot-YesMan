@@ -1,4 +1,4 @@
 config.py
 data/
-*.json
+lib/
 __pycache__/
