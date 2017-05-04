@@ -11,114 +11,98 @@ from tinydb.middlewares import CachingMiddleware
 Message = Query()
 
 
-        
-    
-
-
-      
-
-def get_storage(channel):
-    "Returns the filename where the given channel should be stored."
-    os.makedirs("data/channels/", exist_ok=True)
-    return "data/channels/%s-%s.json" % (channel.id, channel.name )
-    
-
-
-def build_corpus(userid):
-    corpus = []
-    for fname in os.listdir("data/channels/"):
-        with open("data/channels/"+fname) as fp:
-           messages = json.load(fp)
-        for m in messages:
-            if (m["author"]["id"] == userid):
-                corpus.append(m["content"])
-           
-    with open("corpus-%s.json"%(userid), 'w') as fp:
-        json.dump( corpus, fp)
-
-def build_generic_corpus():
-    corpus = []
-    for fname in os.listdir("data/channels/"):
-        with open("data/channels/"+fname) as fp:
-           messages = json.load(fp)
-        for m in messages:
-            corpus.append(m["content"])
-           
-    with open("corpus-generic.json", 'w') as fp:
-        json.dump( corpus, fp)
-
-
 class Archiver:
     
     def __init__(self, bot):
         self.bot = bot
         self.path = os.path.join("data", "archiver")
+        os.makedirs(self.path, exist_ok=True)
         self.dbpath = os.path.join(self.path, "messages.json")
+        # TODO Migrate to a better database
+        # * tinydb loads the whole db into memory. This doens't scale.
+        # * No way to flush cache manualy or detect closing from SIGINT. 
+        #     Can't use Caching safely.(Using it //anyway//.)
+        # Consider:
+        # * ZODB http://www.zodb.org/en/latest/
+        # * CodernityDB http://labs.codernity.com/codernitydb/
         self.db = TinyDB(self.dbpath, storage=CachingMiddleware(JSONStorage))
+        # self.db = TinyDB(self.dbpath)
+        
+    def get_storage(self, channel):
+        """Returns the filename where the given channel should be stored."""
+        outfile = os.path.join(self.path, "%s-%s.json" % (channel.id, channel.name ))
+        return outfile
+
+        
+    def get_user_messages(self, userid):
+        """Returns a generator that produces the content of all messages from the given user in the archive"""
+        return ["NOt IMplemented"]
     
-
-    async def get_messages(self, channel, limit=100, before=None, after=None):
-        payload = {'limit':limit}
-        if before:
-            payload["before"] = before
-        if after:
-            payload['after'] = after
-        
-        url = '{0.CHANNELS}/{1}/messages'.format(client.http, channel.id)
-        messages = await self.bot.http.get( url, params=payload )
-        return messages
-        
-
-    async def get_all_messages(self, client, channel):
-        messages = await self.get_messages(channel)
+    
+    async def get_all_messages(self, channel):
+        messages = await self.get_messages(client, channel)
         
         last_snowflake = messages[-1]['id']
         while True:
             print("getting messages before %r" % (last_snowflake))
-            new_messages = await self.get_messages(channel, before=last_snowflake)
+            new_messages = await get_messages(client, channel, last_snowflake)
             if len(new_messages) == 0:
                 break
             messages.extend(new_messages)
             last_snowflake=new_messages[-1]['id']
         
         with open(get_storage(channel), 'w') as outfile:
-            import json
             outfile.write(json.dumps(messages))
             
         return messages
+    
 
-    async def update_channel(self, channel):
+    async def get_messages(self, channel, limit=100, before=None, after=None):
+        """Use the discord client to get some messages from the provided channel"""
+        payload = {'limit':limit}
+        if before:
+            payload["before"] = before
+        if after:
+            payload['after'] = after
+        
+        url = '{0.CHANNELS}/{1}/messages'.format(self.bot.http, channel.id)
+        messages = await self.bot.http.get( url, params=payload )
+        return messages
+        
+
+    async def _update_channel(self, channel):
+        """ Gets messages from the channel ignoring ones that are laready in db.
+            Won't pay update database for deleded or changed messages."""
         print("updating %s" % (channel.name))
-        ## if we have nothing on the channel get all the messages
-        #if db.get(Message.channel_id == channel.id) is None:
-        #    messages = get_all_messages(client, self.channel)
-        #    db.insert_multiple(messages);
-        #    return 
-        ## if we have some messages get the more recent ones.
         present = self.db.search(Message.channel_id == channel.id)
         latest_id = 0
         for msg in present:
             latest_id = max(latest_id, int(msg['id']))
         print("\tlatest id: %d" % (latest_id))
         ## Get new messages.
-        while True:
+        reached_current = False
+        found_msg = True
+        while (not reached_current) and found_msg:
+            foud_msg = False
             message_itr = await self.get_messages(channel, after=latest_id)
-            if len(message_itr) == 0:
-                return
             for msg in message_itr:
-                if not self.db.contains(Message.id  == msg.id):
+                if not self.db.contains(Message.id  == msg['id']):
+                    found_msg = True
                     self.db.insert(msg)
-                latest_id = max(latest_id, msg.id)
-                print("\t%s\n\t\t%s" % (msg.id, msg.content[:20]))
+                else:
+                    reached_current = True
+                latest_id = max(latest_id, int(msg['id']))
+                print("\t%s\n\t\t%s" % (msg['id'], msg['content']))
       
 
     @commands.command(aliases=[], pass_context=True)
     @asyncio.coroutine
     async def slurp(self, ctx):
+        """"Quick and dirty download of a channel's contents."""
         bot = ctx.bot
         channel = ctx.message.channel
         
-        messages = await util.get_all_messages(bot, channel)
+        messages = await self.get_all_messages(bot, channel)
         await bot.send_message(channel, "got %d messages." % (len(messages)))
         
         return
@@ -134,20 +118,20 @@ class Archiver:
             await bot.send_message(channel, "Can't find channel %s." % (channel_p))
             return
         
-        messages = await self.update_channel(bot, channel)
+        await self._update_channel(channel)
         await bot.send_message(channel, "got %d messages." % (len(messages)))
         
         return
 
     @commands.command(pass_context = True)
     @asyncio.coroutine
-    async def archive_all(ctx):
+    async def archive_all(self, ctx):
         bot = ctx.bot
         for channel in bot.get_all_channels():
             #print("%s:%s, %s" % ( channel.id, channel.name, channel.type))
             if channel.type is ChannelType.text:
                 try:
-                    messages = await archive.update_channel(bot, channel)
+                    messages = await self._update_channel(bot, channel)
                     print("got %d message" % (len(messages)))
                 except Exception as e:
                     print (repr(e))

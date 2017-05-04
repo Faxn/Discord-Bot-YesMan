@@ -1,4 +1,6 @@
 import asyncio
+import logging
+import sys
 
 import discord
 from discord.ext import commands
@@ -19,9 +21,9 @@ class InfoDumper:
         
         for channel in bot.get_all_channels():
             channels[channel.name] = channel
-            out += "%s\t%s\n" % (channel.id, channel.name)
-        print(out)
-        print(repr(channels))
+            out += "%s\t\t%s\n" % (channel.id, channel.name)
+        logger.info(out)
+        logger.info(repr(channels))
         await bot.send_message(ctx.message.channel, out)
         
         return
@@ -34,7 +36,7 @@ class InfoDumper:
         out = ""
         for member in ctx.message.server.members:
             out += "%s(%s)" % (member.name, member.id)
-        await bot.send_message(channel, out)
+        await bot.say(out)
 
     @commands.command(aliases=[], pass_context = True)
     @asyncio.coroutine
@@ -44,10 +46,17 @@ class InfoDumper:
         out = ""
         for member in bot.get_all_members():
             out += "%s(%s)" % (member.name, member.id)
-        await bot.send_message(channel, out)
-
+        await bot.say(out)
 
 
 def setup(bot):
+    global logger
+    try:
+        logger = logging.getLogger(bot.logger.name+".infodump")
+    except AttributeError:
+        logger = logging.getLogger("infodump")
+        stdout_handler = logging.StreamHandler(sys.stdout)
+        logger.addHandler(stdout_handler)
+        
     bot.add_cog(InfoDumper(bot))
 
