@@ -10,54 +10,81 @@ from tinydb.middlewares import CachingMiddleware
 #Syntatic sugar for tinydb queries.
 Message = Query()
 
+# TODO Migrate to a better database
+# * tinydb loads the whole db into memory. This doens't scale.
+# * No way to flush cache manualy or detect closing from SIGINT. 
+#     Can't use Caching safely.(Using it //anyway//.)
+# Consider:
+# * ZODB http://www.zodb.org/en/latest/
+# * CodernityDB http://labs.codernity.com/codernitydb/
+
+
+
+class Archive:
+    def get_user_messages(self, userid):
+        """Returns iterator over all the given user's messages in the archive."""
+        return ["NOt IMplemented"]
+    
+    def get_channel_messages(self, channel):
+        """Returns iterator over all the messages in the given channel, in order."""
+        return []
+        
+    def add_messages(self, messages):
+        """ Adds <messages> to the databese. Returns nuber of messages added """
+        pass
+
+class TinyDBArchive(Archive):
+    
+    def __init__(self, dbpath):
+        # self.db = TinyDB(dbfile, storage=CachingMiddleware(JSONStorage))
+        self.db = TinyDB(dbpath)
+    
+    def get_user_messages(self, userid):
+        """ Generator that produces all messages from the given user in the archive"""
+        return ["NOt IMplemented"]
+    
+    def get_channel_messages(self, channel):
+        return self.db.search(Message.channel_id == channel.id)
+        
+    def add_messages(self, messages):
+        """ Adds <messages> to the databese. Returns nuber of messages added """
+        added = 0
+        for msg in messages:
+            if not self.db.contains(Message.id  == msg['id']):
+                added += 1
+                self.db.insert(msg)
+        return added
 
 class Archiver:
+    
+    def get_storage(self, channel):
+        """Returns the filename where the given channel should be stored."""
+        outfile = os.path.join(self.path, "%s-%s.json" % (channel.id, channel.name ))
+        return outfile
     
     def __init__(self, bot):
         self.bot = bot
         self.path = os.path.join("data", "archiver")
         os.makedirs(self.path, exist_ok=True)
         self.dbpath = os.path.join(self.path, "messages.json")
-        # TODO Migrate to a better database
-        # * tinydb loads the whole db into memory. This doens't scale.
-        # * No way to flush cache manualy or detect closing from SIGINT. 
-        #     Can't use Caching safely.(Using it //anyway//.)
-        # Consider:
-        # * ZODB http://www.zodb.org/en/latest/
-        # * CodernityDB http://labs.codernity.com/codernitydb/
-        self.db = TinyDB(self.dbpath, storage=CachingMiddleware(JSONStorage))
-        # self.db = TinyDB(self.dbpath)
+        self.archive = TinyDBArchive(self.dbpath)
         
-    def get_storage(self, channel):
-        """Returns the filename where the given channel should be stored."""
-        outfile = os.path.join(self.path, "%s-%s.json" % (channel.id, channel.name ))
-        return outfile
+    async def _fetch_channel_messages(self, channel):
+        """Gets all the messages from a channel in one big unsorted list."""
+        messages = await self._fetch_messages(channel)
 
-        
-    def get_user_messages(self, userid):
-        """Returns a generator that produces the content of all messages from the given user in the archive"""
-        return ["NOt IMplemented"]
-    
-    
-    async def get_all_messages(self, channel):
-        messages = await self.get_messages(client, channel)
-        
         last_snowflake = messages[-1]['id']
         while True:
-            print("getting messages before %r" % (last_snowflake))
-            new_messages = await get_messages(client, channel, last_snowflake)
+            new_messages = await self._fetch_messages(channel, before=last_snowflake)
             if len(new_messages) == 0:
                 break
             messages.extend(new_messages)
             last_snowflake=new_messages[-1]['id']
-        
-        with open(get_storage(channel), 'w') as outfile:
-            outfile.write(json.dumps(messages))
-            
+
         return messages
     
 
-    async def get_messages(self, channel, limit=100, before=None, after=None):
+    async def _fetch_messages(self, channel, limit=100, before=None, after=None):
         """Use the discord client to get some messages from the provided channel"""
         payload = {'limit':limit}
         if before:
@@ -68,32 +95,33 @@ class Archiver:
         url = '{0.CHANNELS}/{1}/messages'.format(self.bot.http, channel.id)
         messages = await self.bot.http.get( url, params=payload )
         return messages
-        
-
+    
     async def _update_channel(self, channel):
-        """ Gets messages from the channel ignoring ones that are laready in db.
-            Won't pay update database for deleded or changed messages."""
-        print("updating %s" % (channel.name))
-        present = self.db.search(Message.channel_id == channel.id)
+        """ Gets messages from the channel ignoring ones that are already in db.
+            Won't update database for deleded or changed messages."""
+        # Figure out the latest message we have from channel
         latest_id = 0
-        for msg in present:
+        for msg in self.archive.get_channel_messages(channel):
             latest_id = max(latest_id, int(msg['id']))
-        print("\tlatest id: %d" % (latest_id))
+        # if we have nothing on the channel get all the messages
+        # discord api doesn't give old messages with after=0 so we have to go backwards.
+        if latest_id == 0:
+            messages = await self._fetch_channel_messages(channel)
+            added = self.archive.add_messages(messages)
+            return added
         ## Get new messages.
         reached_current = False
-        found_msg = True
-        while (not reached_current) and found_msg:
-            foud_msg = False
-            message_itr = await self.get_messages(channel, after=latest_id)
-            for msg in message_itr:
-                if not self.db.contains(Message.id  == msg['id']):
-                    found_msg = True
-                    self.db.insert(msg)
-                else:
-                    reached_current = True
+        total_added = 0
+        while (not reached_current):
+            messages = await self._fetch_messages(channel, after=latest_id)
+            if len(messages) == 0 :
+                break
+            added = self.archive.add_messages(messages)
+            for msg in messages:
                 latest_id = max(latest_id, int(msg['id']))
-                print("\t%s\n\t\t%s" % (msg['id'], msg['content']))
-      
+            reached_current = added < len(messages)
+            total_added += added
+        return total_added
 
     @commands.command(aliases=[], pass_context=True)
     @asyncio.coroutine
@@ -102,14 +130,17 @@ class Archiver:
         bot = ctx.bot
         channel = ctx.message.channel
         
-        messages = await self.get_all_messages(bot, channel)
-        await bot.send_message(channel, "got %d messages." % (len(messages)))
+        messages = await self._fetch_channel_messages(bot, channel)
         
-        return
+        outpath = self.get_storage(channel)
+        with open(outpath, 'w') as outfile:
+            json.dump(messages, outfile)
+        
+        await bot.say("got %d messages from #%s." % (len(messages), channel.name))
 
-    @commands.command(aliases=[], pass_context = True)
+    @commands.command(name="archive", pass_context = True)
     @asyncio.coroutine
-    async def archive(self, ctx, channel_p : str):
+    async def archive_command(self, ctx, channel_p : str):
         bot = ctx.bot
         
         channel = bot.get_channel(channel_p)
@@ -118,10 +149,8 @@ class Archiver:
             await bot.send_message(channel, "Can't find channel %s." % (channel_p))
             return
         
-        await self._update_channel(channel)
-        await bot.send_message(channel, "got %d messages." % (len(messages)))
-        
-        return
+        added = await self._update_channel(channel)
+        await bot.say("got %d messages from #%s." % (added, channel.name))
 
     @commands.command(pass_context = True)
     @asyncio.coroutine
@@ -131,15 +160,10 @@ class Archiver:
             #print("%s:%s, %s" % ( channel.id, channel.name, channel.type))
             if channel.type is ChannelType.text:
                 try:
-                    messages = await self._update_channel(bot, channel)
-                    print("got %d message" % (len(messages)))
+                    added = await self._update_channel(bot, channel)
+                    await bot.say("got %d messages from #%s." % (added, channel.name))
                 except Exception as e:
-                    print (repr(e))
-    
-    def __unload(self):
-        # TODO Get this to happen on close in red bot. 
-        print("It's okay, the database was safely closed.")
-        self.db.close()
+                    await self.bot.say("Couldn't archive %s because: %s" % (channel.name, repr(e)))
 
 def setup(bot):
     bot.add_cog(Archiver(bot))

@@ -17,14 +17,13 @@ class InfoDumper:
         bot = ctx.bot
         
         channels = {}
-        out=""
+        out="`ID\t\tTYPE\tNAME\n"
         
         for channel in bot.get_all_channels():
             channels[channel.name] = channel
-            out += "%s\t\t%s\n" % (channel.id, channel.name)
+            out += "%s\t%s\t%s\n" % (channel.id, channel.type, channel.name)
         logger.info(out)
-        logger.info(repr(channels))
-        await bot.send_message(ctx.message.channel, out)
+        await bot.send_message(ctx.message.channel, out+'`')
         
         return
 
@@ -56,6 +55,8 @@ def setup(bot):
     except AttributeError:
         logger = logging.getLogger("infodump")
         stdout_handler = logging.StreamHandler(sys.stdout)
+        stdout_handler.setLevel(logging.INFO)
+        logger.setLevel(logging.INFO)
         logger.addHandler(stdout_handler)
         
     bot.add_cog(InfoDumper(bot))
