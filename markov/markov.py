@@ -6,64 +6,6 @@ import os
 import markovify
 from discord.ext import commands
 
-##EXAMPLE CHAIN
-EXCHAIN = { "fish" : { 'food': 1, 'smell': 1}}
-
-#flag for the end of the message.
-TERMINAL = 345935
-
-class markov:
-    @staticmethod
-    def build_chain(corpus : list):
-        chain = {}
-        for line in corpus:
-            toks = line.split() + [TERMINAL]
-            for i in range(len(toks)-1):
-                #Make sure we have a dict for this key
-                if(not toks[i] in chain):
-                    chain[toks[i]] = {}
-                trunk = chain[toks[i]]
-                #increment if this is a repeat leaf
-                if(toks[i+1] in trunk):
-                    trunk[toks[i+1]]+=1
-                #or add the leaf if it's novel
-                else:
-                    trunk[toks[i+1]] = 1
-        return chain
-
-    @staticmethod
-    def clean_chain(chain):
-        clean = []
-        for k in chain:
-            if(len(chain[k]) == 1):
-                clean.append(k)
-        for k in clean:
-            del chain[k]
-
-    @staticmethod
-    def run_chain(chain, start=None):
-        if(start is None):
-            start = random.choice(list(chain.keys()))
-        msg = [start]
-        while True:
-            trunk = chain[msg[-1]]
-            keys = trunk.keys()
-            nxtTokList = []
-            for k in keys:
-                nxtTokList += [k]*trunk[k]
-            nxtTok = random.choice(nxtTokList)
-            if(nxtTok == TERMINAL): break
-            msg.append(nxtTok)
-        return ' '.join(msg)
-
-
-
-# COG
-
-with open('data/corpus-133104714886807552.json') as fp:
-    joe = json.load(fp)
-joeChain = markov.build_chain(joe)
-
 
 def build_corpus(userid):
     corpus = []
@@ -94,12 +36,18 @@ class Markov:
         self.path = os.path.join("data", "markov")
         os.makedirs(self.path, exist_ok=True)
         self.bot = bot
+        self.joeify = None
     
     @commands.command(pass_context=True)
     @asyncio.coroutine
     async def speak(self, ctx):
-        msg = markov.run_chain(joeChain)
-        await ctx.bot.send_message(ctx.message.channel, msg)
+        if not self.joeify:
+            with open('data/corpus-133104714886807552.json') as fp:
+                joe = json.load(fp)
+            joetext = '\n'.join(joe)
+            self.joeify = markovify.NewlineText(joetext)
+        msg = self.joeify.make_sentence()
+        await self.bot.say(msg)
         try:
             await bot.delete_message(ctx.message)
         except:
@@ -117,9 +65,13 @@ def setup(bot):
     bot.add_cog(Markov(bot))
     
 def main():
-    pass
+    joetext = '\n'.join(joe)
+    joeify = markovify.Text(joetext)
+    for i in range(10):
+        print(joeify.make_sentence())
+        print()
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()
 
 
