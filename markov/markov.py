@@ -2,8 +2,10 @@ import random
 import json
 import asyncio
 import os
+import re
 
 import markovify
+import discord
 from discord.ext import commands
 
 
@@ -37,6 +39,16 @@ class Markov:
         os.makedirs(self.path, exist_ok=True)
         self.bot = bot
         self.joeify = None
+        self.chain_cls = markovify.NewlineText
+        self.topics = dict()
+        #self._load_topics()
+    
+    def _load_topics(self):
+        for f in os.scandir(self.path):
+            if re.match('.*\.topic\.json$', f.name):
+                name = re.search('(.*)\.topic\.json$', f.name).groups()[0]
+                with open(f) as topic_file:
+                    self.topics[name] = self.chain_cls.from_json(topic_file.read())
     
     @commands.command(pass_context=True)
     @asyncio.coroutine
@@ -52,6 +64,37 @@ class Markov:
             await bot.delete_message(ctx.message)
         except:
             pass
+    
+    @commands.group(pass_context = True)
+    async def markov(self):
+        # TODO stub
+        hlp = self.bot.formatter.format_help_for(ctx, ctx.invoked_subcommand)
+    
+    #@markov.command()
+    @commands.command(pass_context = True)
+    async def ingest_archive(self, ctx, topic : str, user: discord.Member):
+        assert isinstance(user, discord.Member)
+        archive = self.bot.cogs['Archiver'].archive
+        lines = [x['content'] for x in archive.get_messages(user=user)]
+        print(lines)
+        corpus = "\n".join(lines)
+        print(corpus)
+        new_chain = self.chain_cls(corpus, state_size=1)
+        if topic in self.topics:
+            old_chain = self.topics[topic]
+            combined_chain = markovify.combine([new_chain, old_chain])
+            self.topics[topic] = combined_chain
+        else:
+            self.topics[topic] = new_chain
+        await self.bot.say("generated chain for user:%s." % user)
+        with open("tmp.json", 'w') as fp:
+            fp.write(new_chain.to_json())
+    
+    #@markov.command()
+    @commands.command()
+    async def generate(self, topic : str):
+        sentence = self.topics[topic].make_sentence()
+        await self.bot.say(sentence)
             
     #@bot.listen('on_message')
     async def zon_message(self, message):

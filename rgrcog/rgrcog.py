@@ -17,7 +17,7 @@ class RGR:
             # discord.py parses arguments for us, we can't have that.
             expr = " ".join(roll)
             print(expr)
-            response = rgr.roll(expr)
+            _, response, _ = rgr.roll(expr)
             await self.bot.say("{} rolls {}".format(ctx.message.author, response))
         except Exception as err:
             print(err)

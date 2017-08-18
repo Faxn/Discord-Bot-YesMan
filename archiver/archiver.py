@@ -3,6 +3,7 @@ import os
 import json
 import logging
 
+import discord
 from discord.ext import commands
 from discord.enums import ChannelType
 from tinydb import TinyDB, Query, where
@@ -33,10 +34,14 @@ class Archive:
         messages = iter(self.get_all_messages())
         while True:
             m = next(messages)
-            if user and user.id != m['author']['id']:
+            if isinstance(user, discord.Member):
+                if user.id != m['author']['id']:                
+                    continue
+            elif user and user != m['author']['id']:
                 continue
             if channel and channel.id != m['channel_id']:
                 continue
+            logger.debug("logger found {}", m)
             yield m
             
     def add_messages(self, messages, all_new=False):

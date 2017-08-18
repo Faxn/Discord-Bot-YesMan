@@ -2,6 +2,7 @@ import asyncio
 import logging
 import sys
 
+import discord
 from discord.ext import commands
 
 
@@ -16,10 +17,10 @@ class InfoDumper:
         if ctx.invoked_subcommand is None:
             await self.bot.say("See `help %s` for usage info." % ctx.command)
             
-    @info.command(name="ctx", pass_context=True)
+    @info.command(name="events", pass_context=True)
     @asyncio.coroutine
     async def _show_ctx(self, ctx):
-        await self.bot.say(dir(ctx))
+        await self.bot.say(str(self.bot.extra_events.keys()))
 
     @info.command(name="channels", aliases=[], pass_context=True)
     @asyncio.coroutine
@@ -45,6 +46,21 @@ class InfoDumper:
             out += "%s\t%s\n" % (member.id, member.name)
         await self.bot.say(out+'`')
 
+    @info.command(name="cogs", aliases=[], pass_context=True)
+    @asyncio.coroutine
+    async def _show_cogs(self, ctx):
+        """Dumps the names and ids of every user on the current server."""
+        await self.bot.say(self.bot.cogs)
+
+    @info.command()
+    async def user(self, user:discord.Member=None):
+        await self.bot.say(user)
+        await self.bot.say(json.dumps(user))
+
+    
+    async def on_command_error(self, exc, ctx):
+        await self.bot.send_message(ctx.message.channel, str(exc))
+
 
 def setup(bot):
     global logger
@@ -56,4 +72,5 @@ def setup(bot):
         stdout_handler.setLevel(logging.INFO)
         logger.setLevel(logging.INFO)
         logger.addHandler(stdout_handler)
-    bot.add_cog(InfoDumper(bot))
+    n = InfoDumper(bot)
+    bot.add_cog(n)
