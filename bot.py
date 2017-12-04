@@ -70,8 +70,11 @@ def main(args):
     
     for f in os.scandir():
         if f.is_dir() and f.name not in blacklist:
-            mod = importlib.import_module("%s.%s" % (f.name, f.name))
-            mod.setup(bot)
+            try:
+                mod = importlib.import_module("%s.%s" % (f.name, f.name))
+                mod.setup(bot)
+            except ModuleNotFoundError:
+                pass
 
     @bot.event
     async def on_ready():
@@ -92,4 +95,5 @@ if __name__ == "__main__":
         logging.basicConfig(level=logging.DEBUG)
         profile.run('main(args)', "restats")
     else:
+        logging.basicConfig(filename='bot.log', filemode="w")
         main(args)

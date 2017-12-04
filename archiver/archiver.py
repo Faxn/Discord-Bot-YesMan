@@ -6,6 +6,7 @@ import logging
 import discord
 from discord.ext import commands
 from discord.enums import ChannelType
+from discord.http import Route
 from tinydb import TinyDB, Query, where
 from tinydb.storages import JSONStorage
 from tinydb.middlewares import CachingMiddleware
@@ -94,11 +95,6 @@ class TinyDBArchive(Archive):
 
 class Archiver:
     
-    def get_storage(self, channel):
-        """Returns the filename where the given channel should be stored."""
-        outfile = os.path.join(self.path, "%s-%s.json" % (channel.id, channel.name ))
-        return outfile
-    
     def __init__(self, bot):
         self.bot = bot
         self.path = os.path.join("data", "archiver")
@@ -111,17 +107,29 @@ class Archiver:
         """Use the discord client to get some messages from the provided channel"""
         await asyncio.sleep(0)
         payload = {'limit':limit}
+        url = "/channels/{0}/messages?limit="+str(limit)
         if before:
             payload["before"] = before
+            url += "&before=" + str(before)
         if after:
             payload['after'] = after
-        
-        url = '{0.CHANNELS}/{1}/messages'.format(self.bot.http, channel.id)
+            url += "&after=" + str(after)
+        #url = '{0.CHANNELS}/{1}/messages'.format(self.bot.http, channel.id)
+        r = Route('GET', url.format(channel.id))
         logger.debug("Fetching messages from '%s' with options: %s", channel.name, payload)
-        messages = await self.bot.http.get( url, params=payload )
+        #messages = await self.bot.http.get( url, params=payload )
+        messages = await self.bot.http.request(r)
         return messages
 
-
+    @commands.command(pass_context = True)
+    @asyncio.coroutine
+    async def test_fetch(self, ctx, channel: discord.Channel):
+        #channel = self.bot.get_channel(channel_id)
+        messages = await self._fetch_messages(channel, limit=11, after="281962999743250452")
+        for m in messages:
+            print(m['id'])
+    
+    
     async def _archive_channel(self, channel):
         """ Gets newest messages from the channel ignoring ones that are already in db.
             Won't update database for deleded or changed messages."""
@@ -182,6 +190,7 @@ class Archiver:
             await bot.say("Can't find channel %s." % (channel_p))
             return
         
+        await bot.say("Archiving Channel %s" % channel_p)
         added = await self._archive_channel(channel)
         await bot.say("got %d messages from #%s." % (added, channel.name))
 
@@ -203,6 +212,7 @@ def setup(bot):
     global logger
     try:
         logger = logging.getLogger(bot.logger.name+".archiver")
+        logger.setLevel(logging.DEBUG)
     except AttributeError:
         logger = logging.getLogger("archiver")
         stdout_handler = logging.StreamHandler(sys.stdout)
