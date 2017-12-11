@@ -2,3 +2,11 @@ config.py
 data/
 lib/
 __pycache__/
+army.py
+bot.log
+debug.log
+env/
+messages.log
+restats
+testMarkov.py
+tmp.json

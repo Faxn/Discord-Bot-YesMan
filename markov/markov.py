@@ -40,8 +40,17 @@ class Markov:
         self.bot = bot
         self.joeify = None
         self.chain_cls = markovify.NewlineText
+        self._load_settings()
         self.topics = dict()
-        #self._load_topics()
+        self._load_topics()
+    
+    def _load_settings(self):
+        s_file = self.path.join('settings.json')
+        if os.path.exists(s_file):
+            with open(s_file) as fp:
+                self.settings = json.load(fp)
+        else:
+            self.settings = dict()
     
     def _load_topics(self):
         for f in os.scandir(self.path):
@@ -59,12 +68,14 @@ class Markov:
             joetext = '\n'.join(joe)
             self.joeify = markovify.NewlineText(joetext)
         msg = self.joeify.make_sentence()
+        msg = msg.replace('@', '') # Hack to Remove @mentions. TODO make this smarter.
         await self.bot.say(msg)
         try:
             await bot.delete_message(ctx.message)
         except:
             pass
     
+       
     @commands.group(pass_context = True)
     async def markov(self):
         # TODO stub
@@ -76,9 +87,7 @@ class Markov:
         assert isinstance(user, discord.Member)
         archive = self.bot.cogs['Archiver'].archive
         lines = [x['content'] for x in archive.get_messages(user=user)]
-        print(lines)
         corpus = "\n".join(lines)
-        print(corpus)
         new_chain = self.chain_cls(corpus, state_size=1)
         if topic in self.topics:
             old_chain = self.topics[topic]
@@ -87,13 +96,22 @@ class Markov:
         else:
             self.topics[topic] = new_chain
         await self.bot.say("generated chain for user:%s." % user)
-        with open("tmp.json", 'w') as fp:
+        path = os.path.join(self.path, topic+".topic.json")
+        with open(path, 'w') as fp:
             fp.write(new_chain.to_json())
+    
+    #@markov.command()
+    @commands.command()
+    async def list_topics(self):
+        sentence = "\n".join(self.topics)
+        sentence = sentence.replace('@', '') # Hack to Remove @mentions. TODO make this smarter.
+        await self.bot.say(sentence)
     
     #@markov.command()
     @commands.command()
     async def generate(self, topic : str):
         sentence = self.topics[topic].make_sentence()
+        sentence = sentence.replace('@', '') # Hack to Remove @mentions. TODO make this smarter.
         await self.bot.say(sentence)
             
     #@bot.listen('on_message')
@@ -113,8 +131,13 @@ def main():
     for i in range(10):
         print(joeify.make_sentence())
         print()
+    
 
 if __name__ == '__main__':
+    import argparse
+    parser = argparse.ArgumentParser(description='Process some integers.')
+    parser.add_argument('--list', action='store_true')
+    args = parser.parse_args()
     main()
 
 
