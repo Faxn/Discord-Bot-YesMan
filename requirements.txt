@@ -9,3 +9,4 @@ ply==3.10
 tinydb==3.7.0
 Unidecode==0.4.21
 websockets==3.4
+motor==1.2.0

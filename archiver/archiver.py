@@ -7,13 +7,26 @@ import discord
 from discord.ext import commands
 from discord.enums import ChannelType
 from discord.http import Route
-from tinydb import TinyDB, Query, where
-from tinydb.storages import JSONStorage
-from tinydb.middlewares import CachingMiddleware
 
-#Syntatic sugar for tinydb queries.
-logger = None
-Message = Query()
+#default logger in case we aren't in a bot, or the bot doesn't have a logger.
+logger = logging.getLogger(__name__)
+
+#tinydb archiver
+try:
+    from tinydb import TinyDB, Query, where
+    from tinydb.storages import JSONStorage
+    from tinydb.middlewares import CachingMiddleware
+except ImportError as e:
+    logger.info('Failed to import TinyDB', exc_info=True)
+    TinyDB = False
+
+#mongoDB Archiver
+try:
+    import motor.motor_asyncio
+    Motor = True
+except ImportError as e:
+    logger.info('Failed to import motor for mongoDB', exc_info=True)
+    Motor = False
 
 # TODO Migrate to a better database
 # * tinydb loads the whole db into memory. This doens't scale.
@@ -23,7 +36,8 @@ Message = Query()
 # * ZODB http://www.zodb.org/en/latest/
 # * CodernityDB http://labs.codernity.com/codernitydb/
 
-
+archive_backends = {}
+DEFAULT_PATH = {}
 
 class Archive:
     
@@ -42,11 +56,12 @@ class Archive:
                 continue
             if channel and channel.id != m['channel_id']:
                 continue
-            logger.debug("logger found {}", m)
+            logger.debug("logger found: %s\n", m)
             yield m
             
     def add_messages(self, messages, all_new=False):
         """ Adds <messages> to the databese. Returns nuber of messages added """
+        #TODO: Remove
         raise Exception("Not Implemented")
     
     async def async_add_messages(self, messages, *args, **kwargs):
@@ -54,44 +69,83 @@ class Archive:
     
     def flush(self):
         pass
+   
 
-class TinyDBArchive(Archive):
-    
-    def __init__(self, dbpath, loop=None):
-        self.path = dbpath
-        self.db = TinyDB(self.path, storage=CachingMiddleware(JSONStorage))
+if TinyDB:
+    #Syntatic sugar for tinydb queries.
+    Message = Query()
+
+    class TinyDBArchive(Archive):
         
-    def get_all_messages(self):
-        return self.db.all()
-    
-    def zget_messages(self):
-        # TODO remove or finish.
-        return self.db.search(Message.author.id == member.id)
-        msgs = self.db.search(Message.channel_id == channel.id)
-        msgs.sort(key=lambda x: x['timestamp'])
-        return msgs
+        def __init__(self, dbpath, loop=None):
+            self.path = dbpath
+            self.db = TinyDB(self.path, storage=CachingMiddleware(JSONStorage))
+            
+        def get_all_messages(self):
+            return self.db.all()
         
-    def add_messages(self, messages, all_new=False):
-        """ Adds <messages> to the database. Returns number of messages added """
-        added = 0
-        for msg in messages:
-            if all_new or not self.db.contains(Message.id  == msg['id']):
-                added += 1
-                self.db.insert(msg)
-        return added
-    
-    async def async_add_messages(self, messages, all_new=False):
-        futures = []        
-        for msg in messages:
-            await asyncio.sleep(0)
-            self.db.insert(msg)
-        return len(messages)
-    
-    def flush(self):
-        flushed = False
-        if '_storage' in dir(self.db) and 'flush' in dir(self.db._storage):
-            self.db._storage.flush()
-    
+        def zget_messages(self):
+            # TODO remove or finish.
+            return self.db.search(Message.author.id == member.id)
+            msgs = self.db.search(Message.channel_id == channel.id)
+            msgs.sort(key=lambda x: x['timestamp'])
+            return msgs
+            
+        def add_messages(self, messages, all_new=False):
+            """ Adds <messages> to the database. Returns number of messages added """
+            added = 0
+            for msg in messages:
+                if all_new or not self.db.contains(Message.id  == msg['id']):
+                    added += 1
+                    self.db.insert(msg)
+            return added
+        
+        async def async_add_messages(self, messages, all_new=False):
+            added = 0
+            for msg in messages:
+                await asyncio.sleep(0)
+                if all_new or not self.db.contains(Message.id  == msg['id']):
+                    self.db.insert(msg)
+                    added += 1
+            return added
+        
+        def flush(self):
+            flushed = False
+            if '_storage' in dir(self.db) and 'flush' in dir(self.db._storage):
+                self.db._storage.flush()
+
+    archive_backends['TinyDB'] = TinyDBArchive
+    DEFAULT_PATH['TinyDB'] = os.path.join("data", "archiver", "messages.json")
+
+if Motor:
+    class MongoMotorArchive(Archive):
+        def __init__(self, dbpath, loop=None):
+            client = motor.motor_asyncio.AsyncIOMotorClient(dbpath)
+            self.db = client.get_database()
+            self.loop = loop or asyncio.get_event_loop()
+        async def async_add_messages(self, messages, all_new=False):
+            #TODO: Batching Might be nice.
+            added = 0
+            for m in messages:
+                m['_id'] = m['id']
+                if all_new:
+                    added += 1
+                    await self.db.messages.insert_one(m)
+                else:
+                    t = await self.db.messages.find_one({ '_id':m['_id'] })
+                    if not t:
+                        added += 1
+                        await self.db.messages.insert_one(m)
+            return added
+        def get_all_messages(self):
+            cursor = self.db.messages.find()
+            f = cursor.to_list(None)
+            return self.loop.run_until_complete(f)
+                    
+    archive_backends['MongoDB'] = MongoMotorArchive
+    DEFAULT_PATH['MongoDB'] = "mongodb://localhost/discordArchiver"
+            
+
 
 class Archiver:
     
@@ -99,7 +153,7 @@ class Archiver:
         self.bot = bot
         self.path = os.path.join("data", "archiver")
         os.makedirs(self.path, exist_ok=True)
-        self.dbpath = os.path.join(self.path, "messages.json")
+        self.dbpath = DEFAULT_PATH['TinyDB']
         self.archive = TinyDBArchive(self.dbpath, bot.loop)
 
 
@@ -208,15 +262,14 @@ class Archiver:
                     await self.bot.say("Couldn't archive %s because: %s" % (channel.name, repr(e)))
         self.bot.say("Done archiving Everything.")
 
+
+
+
 def setup(bot):
-    global logger
     try:
         logger = logging.getLogger(bot.logger.name+".archiver")
         logger.setLevel(logging.DEBUG)
     except AttributeError:
-        logger = logging.getLogger("archiver")
-        stdout_handler = logging.StreamHandler(sys.stdout)
-        stdout_handler.setLevel(logging.INFO)
-        logger.setLevel(logging.INFO)
-        logger.addHandler(stdout_handler)
+        #the default logger at the top of the file will be used.
+        pass
     bot.add_cog(Archiver(bot))
