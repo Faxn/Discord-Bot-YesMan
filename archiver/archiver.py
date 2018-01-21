@@ -38,6 +38,7 @@ except ImportError as e:
 
 archive_backends = {}
 DEFAULT_PATH = {}
+DEFAULT_CONFIG = {'backend': 'TinyDB'}
 
 class Archive:
     
@@ -148,14 +149,27 @@ if Motor:
 
 
 class Archiver:
+    """Cog that archives messages from discord."""
     
     def __init__(self, bot):
         self.bot = bot
         self.path = os.path.join("data", "archiver")
         os.makedirs(self.path, exist_ok=True)
-        self.dbpath = DEFAULT_PATH['TinyDB']
-        self.archive = TinyDBArchive(self.dbpath, bot.loop)
-
+        self.config_path = os.path.join(self.path, "config.json")
+        if os.path.exists(self.config_path):
+            with open(self.config_path, 'r') as config_fp:
+                json_config = json.load(config_fp)
+            # collections.ChainMap is the normal Way to do this, but json.dump can't handle it (python 3.6.3).
+            self.config = DEFAULT_CONFIG.copy()
+            self.config.update(json_config)
+        else:
+            self.config = DEFAULT_CONFIG
+        backend = self.config['backend']
+        self.config[backend+"_path"] = self.config.get(backend+"_path", DEFAULT_PATH[backend])
+        self.archive = archive_backends[backend](self.config[backend+"_path"], bot.loop)
+        #Write out Config
+        with open(self.config_path, 'w') as config_fp:
+            json.dump(self.config, config_fp, indent=4)
 
     async def _fetch_messages(self, channel, limit=100, before=None, after=None):
         """Use the discord client to get some messages from the provided channel"""

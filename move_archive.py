@@ -1,5 +1,6 @@
 import argparse
 import logging
+import asyncio
 
 import archiver.archiver as archiver
 
@@ -40,4 +41,5 @@ if(args.out_path == '-'):
 in_archive = archive_backends[args.in_class](args.in_path)
 out_archive = archive_backends[args.out_class](args.out_path)
 
-out_archive.add_messages(in_archive.get_all_messages())
+f = out_archive.async_add_messages(in_archive.get_all_messages())
+asyncio.get_event_loop().run_until_complete(f)
