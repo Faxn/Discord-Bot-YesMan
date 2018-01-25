@@ -150,7 +150,7 @@ if Motor:
                         added += 1
                         await self.db.messages.insert_one(m)
             return added
-        async def get_messages(self):
+        async def get_all_messages(self):
             cursor = self.db.messages.find()
             #m_iter = cursor.to_list(None)
             #return self.loop.run_until_complete(f)

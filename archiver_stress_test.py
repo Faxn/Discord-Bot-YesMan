@@ -67,8 +67,8 @@ async def verify():
     for c in range(CHANNELS):
         # counter for this Channel
         c_count = 0
-        async for m in archive.get_messages(channel={'id':a}):
-            assert m['author']['id'] == a
+        async for m in archive.get_messages(channel={'id':c}):
+            assert m['channel_id'] == c
             t_count += 1
             c_count += 1
         assert c_count >= args.test_count/CHANNELS - CHANNELS
@@ -85,11 +85,14 @@ try:
     read_start = time.clock()
     loop.run_until_complete(archiver_test())
     read_finish = time.clock()
-
+    
+    verify_start = time.clock()
     loop.run_until_complete(verify())
+    verify_finish = time.clock()
     
     print( "Inserted %d records in %f clock" % (args.test_count, insert_finish-insert_start))
     print( "Read     %d records in %f clock" % (args.test_count, read_finish-read_start))
+    print( "Verify   %d records in %f clock" % (args.test_count, verify_finish-verify_start))
 
 finally:
     if args.test_class == 'MongoDB':
