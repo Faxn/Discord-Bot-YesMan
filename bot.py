@@ -90,10 +90,10 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Process some integers.')
     parser.add_argument('--debug', action='store_true')
     args = parser.parse_args()
+    logging.basicConfig(filename='bot.log', filemode="w")
     if args.debug:
         import cProfile as profile
         logging.basicConfig(level=logging.DEBUG)
         profile.run('main(args)', "restats")
     else:
-        logging.basicConfig(filename='bot.log', filemode="w")
         main(args)
