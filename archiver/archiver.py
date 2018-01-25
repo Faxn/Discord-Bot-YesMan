@@ -35,6 +35,7 @@ except ImportError as e:
 # Consider:
 # * ZODB http://www.zodb.org/en/latest/
 # * CodernityDB http://labs.codernity.com/codernitydb/
+# * MongoDB
 
 archive_backends = {}
 DEFAULT_PATH = {}
@@ -43,29 +44,39 @@ DEFAULT_CONFIG = {'backend': 'TinyDB'}
 class Archive:
     
     def get_all_messages(self):
+        #TODO: Deprecate and Remove
         raise Exception("Not Implemented")
     
-    def get_messages(self, user=None, channel=None):
-        "Gets messages optionally restricted by user or channel."
-        messages = iter(self.get_all_messages())
-        while True:
-            m = next(messages)
-            if isinstance(user, discord.Member):
-                if user.id != m['author']['id']:                
-                    continue
-            elif user and user != m['author']['id']:
+    async def get_messages(self, user=None, channel=None):
+        """Gets messages optionally restricted by user or channel. user or 
+        channel can be anything with an id attribute, a dictionary containing a 
+        key['id'] or just an id."""
+        
+        messages = self.get_all_messages()
+        user_id = None
+        if hasattr(user, 'id'): user_id = user.id
+        elif isinstance(user, dict): user_id = user['id']
+        elif user: user_id = user
+        
+        channel_id = None
+        if hasattr(channel, 'id'): channel_id = channel.id
+        elif isinstance(channel, dict): channel_id = channel['id']
+        elif channel: channel_id = channel
+        
+        async for m in messages:
+            if user_id is not None and user_id != m['author']['id']:
                 continue
-            if channel and channel.id != m['channel_id']:
+            if channel_id is not None and channel_id != m['channel_id']:
                 continue
-            logger.debug("logger found: %s\n", m)
+            logger.debug("Message search found: %s\n", m)
             yield m
             
     def add_messages(self, messages, all_new=False):
-        """ Adds <messages> to the databese. Returns nuber of messages added """
         #TODO: Remove
         raise Exception("Not Implemented")
     
     async def async_add_messages(self, messages, *args, **kwargs):
+        """ Adds <messages> to the databese. Returns nuber of messages added """
         return self.add_messages(*args, **kwargs)
     
     def flush(self):
@@ -82,8 +93,9 @@ if TinyDB:
             self.path = dbpath
             self.db = TinyDB(self.path, storage=CachingMiddleware(JSONStorage))
             
-        def get_all_messages(self):
-            return self.db.all()
+        async def get_all_messages(self):
+            for m in self.db.all():
+                yield m
         
         def zget_messages(self):
             # TODO remove or finish.
@@ -138,10 +150,13 @@ if Motor:
                         added += 1
                         await self.db.messages.insert_one(m)
             return added
-        def get_all_messages(self):
+        async def get_messages(self):
             cursor = self.db.messages.find()
-            f = cursor.to_list(None)
-            return self.loop.run_until_complete(f)
+            #m_iter = cursor.to_list(None)
+            #return self.loop.run_until_complete(f)
+            #yield from f
+            async for m in cursor:
+                yield m
                     
     archive_backends['MongoDB'] = MongoMotorArchive
     DEFAULT_PATH['MongoDB'] = "mongodb://localhost/discordArchiver"
@@ -197,13 +212,12 @@ class Archiver:
         for m in messages:
             print(m['id'])
     
-    
     async def _archive_channel(self, channel):
         """ Gets newest messages from the channel ignoring ones that are already in db.
             Won't update database for deleded or changed messages."""
         added = 0
         # Figure out if we have anything from the channel at all
-        messages = iter(self.archive.get_messages(channel=channel))
+        messages = await self.archive.get_messages(channel=channel)
         try:
             msg1 = next(messages)
         except StopIteration:
@@ -248,34 +262,31 @@ class Archiver:
 
     @commands.command(name="archive", pass_context = True)
     @asyncio.coroutine
-    async def archive_command(self, ctx, channel_p : str):
+    async def archive_command(self, ctx, *channels : str):
         "Download messages from server to bot's database."
         bot = ctx.bot
         
-        channel = bot.get_channel(channel_p)
+        if len(channels) == 1 and channels[0] == '*':
+            target_channels = bot.get_all_channels()
+        else:
+            target_channels =  []
+            for channel_s in channels:
+                channel = bot.get_channel(channel_s)
+                if channel is None:
+                    await bot.say("Could not find Channel: %s" % channel_s)
+                target_channels.append(channel)
         
-        if channel == None:
-            await bot.say("Can't find channel %s." % (channel_p))
-            return
-        
-        await bot.say("Archiving Channel %s" % channel_p)
-        added = await self._archive_channel(channel)
-        await bot.say("got %d messages from #%s." % (added, channel.name))
-
-    @commands.command(pass_context = True)
-    @asyncio.coroutine
-    async def archive_all(self, ctx):
-        bot = ctx.bot
-        for channel in bot.get_all_channels():
-            #print("%s:%s, %s" % ( channel.id, channel.name, channel.type))
+        for channel in target_channels:
+            logger.info("Archiving: %s:%s, %s" % ( channel.id, channel.name, channel.type))
+            await bot.say("Archiving Channel %s" % channel)
             if channel.type is ChannelType.text:
                 try:
                     added = await self._archive_channel(channel)
                     await bot.say("got %d messages from %s#%s." % (added, channel.server.name, channel.name))
                 except Exception as e:
-                    await self.bot.say("Couldn't archive %s because: %s" % (channel.name, repr(e)))
+                    logger.warn("Couldn't archive %s because: %s" % (channel.name, repr(e),), exc_info=True)
+                    await self.bot.say("Couldn't archive %s because: %s" % (channel.name, repr(e),))
         self.bot.say("Done archiving Everything.")
-
 
 
 
