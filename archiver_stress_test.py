@@ -78,7 +78,7 @@ async def verify():
     
 try:
     insert_start = time.clock()
-    f = archive.async_add_messages(test_messages(args.test_count))
+    f = archive.add_messages(test_messages(args.test_count), all_new=True)
     loop.run_until_complete(f)
     insert_finish = time.clock()
 
@@ -95,6 +95,9 @@ try:
     print( "Verify   %d records in %f clock" % (args.test_count, verify_finish-verify_start))
 
 finally:
+    
+    archive.drop()
+    """
     if args.test_class == 'MongoDB':
         import motor.motor_asyncio
         import re
@@ -105,4 +108,4 @@ finally:
                 if re.match("^testArchiver", db):
                     f2 = client.drop_database(db)
                     asyncio.get_event_loop().run_until_complete(f2)
-        
+       """ 

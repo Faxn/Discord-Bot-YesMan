@@ -43,7 +43,7 @@ DEFAULT_CONFIG = {'backend': 'TinyDB'}
 
 class Archive:
     
-    def get_all_messages(self):
+    async def get_all_messages(self):
         #TODO: Deprecate and Remove
         raise Exception("Not Implemented")
     
@@ -71,23 +71,24 @@ class Archive:
             logger.debug("Message search found: %s\n", m)
             yield m
             
-    def add_messages(self, messages, all_new=False):
-        #TODO: Remove
-        raise Exception("Not Implemented")
-    
-    async def async_add_messages(self, messages, *args, **kwargs):
+    async def add_messages(self, messages, *args, **kwargs):
         """ Adds <messages> to the databese. Returns nuber of messages added """
         return self.add_messages(*args, **kwargs)
     
     def flush(self):
         pass
    
+    def drop(self):
+        """ Delete the whole database. """
+        raise Exception("Not Implemented")
 
 if TinyDB:
     #Syntatic sugar for tinydb queries.
     Message = Query()
 
     class TinyDBArchive(Archive):
+        
+        DEFAULT_PATH = os.path.join("data", "archiver", "messages.json")
         
         def __init__(self, dbpath, loop=None):
             self.path = dbpath
@@ -113,7 +114,7 @@ if TinyDB:
                     self.db.insert(msg)
             return added
         
-        async def async_add_messages(self, messages, all_new=False):
+        async def add_messages(self, messages, all_new=False):
             added = 0
             for msg in messages:
                 await asyncio.sleep(0)
@@ -126,17 +127,24 @@ if TinyDB:
             flushed = False
             if '_storage' in dir(self.db) and 'flush' in dir(self.db._storage):
                 self.db._storage.flush()
+        
+        def drop(self):
+            self.db.close()
+            os.remove(self.path)
 
     archive_backends['TinyDB'] = TinyDBArchive
     DEFAULT_PATH['TinyDB'] = os.path.join("data", "archiver", "messages.json")
 
 if Motor:
     class MongoMotorArchive(Archive):
+        
+        DEFAULT_PATH = "mongodb://localhost/discordArchiver"
+        
         def __init__(self, dbpath, loop=None):
-            client = motor.motor_asyncio.AsyncIOMotorClient(dbpath)
-            self.db = client.get_database()
+            self.client = motor.motor_asyncio.AsyncIOMotorClient(dbpath)
+            self.db = self.client.get_database()
             self.loop = loop or asyncio.get_event_loop()
-        async def async_add_messages(self, messages, all_new=False):
+        async def add_messages(self, messages, all_new=False):
             #TODO: Batching Might be nice.
             added = 0
             for m in messages:
@@ -152,11 +160,11 @@ if Motor:
             return added
         async def get_all_messages(self):
             cursor = self.db.messages.find()
-            #m_iter = cursor.to_list(None)
-            #return self.loop.run_until_complete(f)
-            #yield from f
             async for m in cursor:
                 yield m
+                
+        def drop(self):
+            self.client.drop_database(self.db)
                     
     archive_backends['MongoDB'] = MongoMotorArchive
     DEFAULT_PATH['MongoDB'] = "mongodb://localhost/discordArchiver"
@@ -244,7 +252,7 @@ class Archiver:
             if len(messages) == 0 :
                 break
             # added += self.archive.add_messages(messages, all_new=True)
-            added +=await  self.archive.async_add_messages(messages, all_new=True)
+            added +=await  self.archive.add_messages(messages, all_new=True)
             for msg in messages:
                 latest_id = max(latest_id, int(msg['id']))
 
@@ -253,7 +261,7 @@ class Archiver:
             messages = await self._fetch_messages(channel, before=oldest_id)
             if len(messages) == 0 :
                 break
-            added += await self.archive.async_add_messages(messages, all_new=True)
+            added += await self.archive.add_messages(messages, all_new=True)
             for msg in messages:
                 oldest_id = min(oldest_id, int(msg['id']))
         # make sure the archive gets saved to disk.
