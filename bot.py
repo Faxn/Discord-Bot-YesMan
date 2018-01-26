@@ -19,8 +19,6 @@ sys.path.insert(0, "lib")
 
 
     
-blacklist = ["__pycache__", 'lib', 'data', '.', '..', '.git']
-
 def on_sigint(signal, frame):
         print('We have been interrupted.')
         sys.exit(0)
@@ -69,12 +67,13 @@ def main(args):
     
     
     for f in os.scandir():
-        if f.is_dir() and f.name not in blacklist:
+        if f.is_dir() and os.path.exists(os.path.join(f.name, 'info.json')) :
             try:
                 mod = importlib.import_module("%s.%s" % (f.name, f.name))
                 mod.setup(bot)
+                bot.logger.info("loaded module: %s" % f)
             except ModuleNotFoundError:
-                pass
+                bot.logger.warn("Failed to load module: %s" %f, exec_info=True)
 
     @bot.event
     async def on_ready():

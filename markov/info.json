@@ -1,0 +1,10 @@
+{
+    "AUTHOR" : "Faxn",
+    "INSTALL_MSG" : "'archiver' installed `[p]archive_all` is probably your next step.",
+    "NAME" : "markov",
+    "SHORT" : "Tries to mimic users by making markov chains of their previous posts.",
+    "DESCRIPTION" : "Tries to mimic users by making markov chains of their previous posts. Needs archiver to access data on users, because getting it all fron discord each time would hit rate limits too much.",
+    "TAGS" : ["archive", "archiver", "backup"],
+    "REQUIREMENTS" : ["Archiver"],
+    "HIDDEN" : false
+}
