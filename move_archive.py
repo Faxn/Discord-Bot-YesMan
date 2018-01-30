@@ -5,6 +5,7 @@ import asyncio
 import archiver.archiver as archiver
 
 class dumpArchive(archiver.Archive):
+    DEFAULT_PATH = "-"
     def __init__(self, path, loop=None):
         pass
 
@@ -14,8 +15,6 @@ class dumpArchive(archiver.Archive):
 
 archive_backends = archiver.archive_backends
 archive_backends['dump'] = dumpArchive
-default_paths = archiver.DEFAULT_PATH
-default_paths['dump'] = '-'
 
 parser = argparse.ArgumentParser(description='move')
 parser.add_argument('--debug', action='store_true', default=True)
