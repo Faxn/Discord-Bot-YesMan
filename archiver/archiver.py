@@ -28,14 +28,9 @@ except ImportError as e:
     logger.info('Failed to import motor for mongoDB', exc_info=True)
     Motor = False
 
-# TODO Migrate to a better database
-# * tinydb loads the whole db into memory. This doens't scale.
-# * No way to flush cache manualy or detect closing from SIGINT. 
-#     Can't use Caching safely.(Using it //anyway//.)
-# Consider:
+# Other Backends to Consider:
 # * ZODB http://www.zodb.org/en/latest/
 # * CodernityDB http://labs.codernity.com/codernitydb/
-# * MongoDB
 
 archive_backends = {}
 DEFAULT_PATH = {}
@@ -92,6 +87,8 @@ if TinyDB:
         
         def __init__(self, dbpath, loop=None):
             self.path = dbpath
+            # TODO: Not sure to flush cache manualy or detect closing from SIGINT.
+            # Can't use Caching safely.(Using it //anyway// because it's just that much faster.)
             self.db = TinyDB(self.path, storage=CachingMiddleware(JSONStorage))
             
         async def get_all_messages(self):

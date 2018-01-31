@@ -1,3 +1,4 @@
+[![Build Status](https://travis-ci.org/Faxn/Faxn-Cogs.svg?branch=master)](https://travis-ci.org/Faxn/Faxn-Cogs)
 
 A set of experimental and messy cogs for (https://github.com/Cog-Creators/Red-DiscordBot).
 

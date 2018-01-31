@@ -1,10 +1,10 @@
 {
     "AUTHOR" : "Faxn",
-    "INSTALL_MSG" : "'archiver' installed `[p]archive_all` is probably your next step.",
+    "INSTALL_MSG" : "This cog needs to be configured by editing data/archiver/config.json and restarting the server.",
     "NAME" : "Archive",
     "SHORT" : "Commands to download messages off a discord server for safe keeping.",
     "DESCRIPTION" : "Commands to download messages off a discord server for safe keeping.",
     "TAGS" : ["archive", "archiver", "backup"],
-    "REQUIREMENTS" : ["tinydb"],
+    "REQUIREMENTS" : ["tinydb", "motor"],
     "HIDDEN" : false
 }

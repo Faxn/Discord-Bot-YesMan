@@ -1,6 +1,6 @@
 {
     "AUTHOR" : "Faxn",
-    "INSTALL_MSG" : "'archiver' installed `[p]archive_all` is probably your next step.",
+    "INSTALL_MSG" : "",
     "NAME" : "Notifier",
     "SHORT" : "Basicaly an egg timer. @mentions the user after the specified time.",
     "DESCRIPTION" : "Basicaly an egg timer. @mentions the user after the specified time.",

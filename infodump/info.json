@@ -2,9 +2,9 @@
     "AUTHOR" : "Faxn",
     "INSTALL_MSG" : "'archiver' installed `[p]archive_all` is probably your next step.",
     "NAME" : "infodump",
-    "SHORT" : "Commands to show developer info.",
+    "SHORT" : "",
     "DESCRIPTION" : "Commands to show developer info.",
-    "TAGS" : ["archive", "archiver", "backup"],
+    "TAGS" : ["developer", "debug"],
     "REQUIREMENTS" : [],
     "HIDDEN" : true
 }
