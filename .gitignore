@@ -4,6 +4,6 @@ lib/
 __pycache__/
 *.log
 env/
-restats
+stats.prof
 tmp.json
 .cache/

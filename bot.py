@@ -37,10 +37,13 @@ def set_logger():
 
     stdout_handler = logging.StreamHandler(sys.stdout)
     stdout_handler.setFormatter(red_format)
-    
     stdout_handler.setLevel(logging.DEBUG)
-    
     logger.addHandler(stdout_handler)
+    
+    file_handler = logging.FileHandler("bot.log", mode='w')
+    file_handler.setFormatter(red_format)
+    file_handler.setLevel(logging.DEBUG)
+    logger.addHandler(file_handler)
 
     return logger
 
@@ -64,14 +67,14 @@ def main(args):
     if args.debug:
         bot.logger.setLevel(logging.DEBUG)
         bot.loop.set_debug(True)
-    
+        logging.basicConfig(level=logging.DEBUG, filename='discord.log', filemode="w")
     
     for f in os.scandir():
         if f.is_dir() and os.path.exists(os.path.join(f.name, 'info.json')) :
             try:
                 mod = importlib.import_module("%s.%s" % (f.name, f.name))
                 mod.setup(bot)
-                bot.logger.info("loaded module: %s" % f)
+                bot.logger.info("loaded module: %s" % f.name)
             except ModuleNotFoundError:
                 bot.logger.warn("Failed to load module: %s" %f, exec_info=True)
 
@@ -88,11 +91,10 @@ def main(args):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Process some integers.')
     parser.add_argument('--debug', action='store_true')
+    parser.add_argument('--profile', action='store_true')
     args = parser.parse_args()
-    logging.basicConfig(filename='bot.log', filemode="w")
-    if args.debug:
+    if args.profile:
         import cProfile as profile
-        logging.basicConfig(level=logging.DEBUG)
-        profile.run('main(args)', "restats")
+        profile.run('main(args)', "stats.prof")
     else:
         main(args)
