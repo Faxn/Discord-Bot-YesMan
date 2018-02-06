@@ -1,10 +1,10 @@
 {
     "AUTHOR" : "Faxn",
-    "INSTALL_MSG" : "This cog needs to be configured by editing data/archiver/config.json and restarting the server.",
+    "INSTALL_MSG" : "This cog needs to be configured by editing data/archiver/config.json and restarting the server. This cog uses far more space than most cogs. If you use the mongo backend it will save data to your local MongoDB instance(or whichever one you configure).",
     "NAME" : "Archive",
-    "SHORT" : "Commands to download messages off a discord server for safe keeping.",
-    "DESCRIPTION" : "Commands to download messages off a discord server for safe keeping.",
+    "SHORT" : "Commands to download messages off a discord server for safe keeping, or machine learning.",
+    "DESCRIPTION" : "Commands to download messages off a discord server for safe keeping, or machine learning.",
     "TAGS" : ["archive", "archiver", "backup"],
-    "REQUIREMENTS" : ["tinydb", "motor"],
+    "REQUIREMENTS" : ["tinydb", "pymongo", "motor"],
     "HIDDEN" : false
 }

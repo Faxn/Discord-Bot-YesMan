@@ -34,19 +34,20 @@ except ImportError as e:
 
 archive_backends = {}
 DEFAULT_PATH = {}
-DEFAULT_CONFIG = {'backend': 'TinyDB'}
+DEFAULT_CONFIG = {'backend': 'TinyDB', 'watch': False }
 
 class Archive:
     
     async def get_all_messages(self):
         #TODO: Deprecate and Remove
-        raise Exception("Not Implemented")
+        #Implement a db specific version for each db.
+        raise NotImplementedError()
     
     async def get_messages(self, user=None, channel=None):
-        """Gets messages optionally restricted by user or channel. user or 
+        """Generator over all messages optionally restricted by user or channel. user or 
         channel can be anything with an id attribute, a dictionary containing a 
         key['id'] or just an id."""
-        
+        #TODO: Remove after implementing a DB specific version for each DB.
         messages = self.get_all_messages()
         user_id = None
         if hasattr(user, 'id'): user_id = user.id
@@ -73,9 +74,12 @@ class Archive:
     def flush(self):
         pass
    
+    def close(self):
+        pass
+   
     def drop(self):
-        """ Delete the whole database. """
-        raise Exception("Not Implemented")
+        """ Delete the whole archive. """
+        raise NotImplementedError()
 
 if TinyDB:
     #Syntatic sugar for tinydb queries.
@@ -140,7 +144,6 @@ if Motor:
         def __init__(self, dbpath, loop=None):
             self.client = motor.motor_asyncio.AsyncIOMotorClient(dbpath)
             self.db = self.client.get_database()
-            self.loop = loop or asyncio.get_event_loop()
         async def add_messages(self, messages, all_new=False):
             #TODO: Batching Might be nice.
             added = 0
@@ -176,20 +179,30 @@ class Archiver:
         self.path = os.path.join("data", "archiver")
         os.makedirs(self.path, exist_ok=True)
         self.config_path = os.path.join(self.path, "config.json")
+        self._load_config()
+        self._save_config()
+        self._make_backend()
+        
+    def _load_config(self):
+        "Loads the config from the file to 'self.config' ."
+        self.config = DEFAULT_CONFIG.copy()
         if os.path.exists(self.config_path):
             with open(self.config_path, 'r') as config_fp:
                 json_config = json.load(config_fp)
             # collections.ChainMap is the normal Way to do this, but json.dump can't handle it (python 3.6.3).
-            self.config = DEFAULT_CONFIG.copy()
             self.config.update(json_config)
-        else:
-            self.config = DEFAULT_CONFIG
-        backend = self.config['backend']
-        self.config[backend+"_path"] = self.config.get(backend+"_path", DEFAULT_PATH[backend])
-        self.archive = archive_backends[backend](self.config[backend+"_path"], bot.loop)
-        #Write out Config
+    
+    def _save_config(self):
+        "Write out 'self.config' to the config file."
         with open(self.config_path, 'w') as config_fp:
             json.dump(self.config, config_fp, indent=4)
+
+    def _make_backend(self):
+        if hasattr(self, "archive"):
+            self.archive.close()
+        backend = self.config['backend']
+        self.config[backend+"_path"] = self.config.setdefault(backend+"_path", DEFAULT_PATH[backend])
+        self.archive = archive_backends[backend](self.config[backend+"_path"])
 
     async def _fetch_messages(self, channel, limit=100, before=None, after=None):
         """Use the discord client to get some messages from the provided channel"""
@@ -204,32 +217,24 @@ class Archiver:
             url += "&after=" + str(after)
         #url = '{0.CHANNELS}/{1}/messages'.format(self.bot.http, channel.id)
         r = Route('GET', url.format(channel.id))
-        logger.debug("Fetching messages from '%s' with options: %s", channel.name, payload)
+        logger.debug("Fetching messages from '%s' with options: %s", channel, payload)
         #messages = await self.bot.http.get( url, params=payload )
         messages = await self.bot.http.request(r)
         return messages
 
-    @commands.command(pass_context = True)
-    @asyncio.coroutine
-    async def test_fetch(self, ctx, channel: discord.Channel):
-        #channel = self.bot.get_channel(channel_id)
-        messages = await self._fetch_messages(channel, limit=11, after="281962999743250452")
-        for m in messages:
-            print(m['id'])
-    
-    async def _archive_channel(self, channel):
+    async def archive_channel(self, channel):
         """ Gets newest messages from the channel ignoring ones that are already in db.
-            Won't update database for deleded or changed messages."""
+            Won't update database for deleted or changed messages."""
         added = 0
         # Figure out if we have anything from the channel at all
-        messages = await self.archive.get_messages(channel=channel)
+        messages = self.archive.get_messages(channel=channel)
         try:
-            msg1 = next(messages)
-        except StopIteration:
-            # we had nothing on this channel
+            msg1 = await messages.__anext__()
+        except StopAsyncIteration:
+            logger.debug("we had no messages from channnel: %s", channel)
             messages = await self._fetch_messages(channel)
             if len(messages) > 0:
-                added += self.archive.add_messages(messages, all_new=True)
+                added += await self.archive.add_messages(messages, all_new=True)
                 msg1 = messages[0]
             else:
                 # empty channel. Nothing to do.
@@ -264,11 +269,28 @@ class Archiver:
         # make sure the archive gets saved to disk.
         self.archive.flush()
         return added
-
-    @commands.command(name="archive", pass_context = True)
-    @asyncio.coroutine
-    async def archive_command(self, ctx, *channels : str):
-        "Download messages from server to bot's database."
+    
+    #Methods that start with  "on_" are events in cogs.
+    async def on_message(self, message):
+        if self.config.get("watch", False):
+            await self.archive_channel(message.channel)
+    
+    @commands.command(pass_context = True)
+    async def test_fetch(self, ctx, channel: discord.Channel):
+        #channel = self.bot.get_channel(channel_id)
+        messages = await self._fetch_messages(channel, limit=11, after="281962999743250452")
+        for m in messages:
+            print(m['id'])
+    
+    @commands.group(name="archive", pass_context=True)
+    async def _archive(self, ctx):
+        """Commands to download messages from discord to a local database."""
+        if ctx.invoked_subcommand is None:
+            await self.bot.say("See `help %s` for usage info." % ctx.command)
+    
+    @_archive.command(name="channel",aliases=['chan', 'c'], pass_context = True)
+    async def _archive_channel(self, ctx, *channels : str):
+        "Download messages from the specified channel to bot's database."
         bot = ctx.bot
         
         if len(channels) == 1 and channels[0] == '*':
@@ -286,16 +308,47 @@ class Archiver:
             await bot.say("Archiving Channel %s" % channel)
             if channel.type is ChannelType.text:
                 try:
-                    added = await self._archive_channel(channel)
+                    added = await self.archive_channel(channel)
                     await bot.say("got %d messages from %s#%s." % (added, channel.server.name, channel.name))
                 except Exception as e:
                     logger.warn("Couldn't archive %s because: %s" % (channel.name, repr(e),), exc_info=True)
                     await self.bot.say("Couldn't archive %s because: %s" % (channel.name, repr(e),))
         self.bot.say("Done archiving Everything.")
 
+    @_archive.command(name='config', pass_context=True)
+    async def _archive_config(self, ctx, key=None, value=None):
+        """usage:
+                archive config : Show all settings.
+                archive config <key> : Show one setting.
+                archive config <key> <value> : Set a setting.(might need to reload to change some)
+                archive config reload : reload config from file. 
+        """
+        if key is None:
+            await ctx.bot.say(json.dumps(self.config, indent=4))
+        elif key == "reload":
+            self._load_config()
+            self._make_backend()
+        elif value is None:
+            await ctx.bot.say("%s == %s" % (key, self.config[key]))
+        else:
+            if key == "backend":
+                if value in archive_backends:
+                    self.config[key] = value
+                else:
+                    await ctx.bot.say("Backend '%s' not installed. Try one of %s" % (value, str(archive_backends.keys())) )
+                    return
+            self.config[key] = value
+            #rebuild backend if relevent options changed.
+            if (len(key) > 5 and key[-5:] == "_path") or key == 'backend':
+                self._make_backend()
+                await ctx.bot.say("Backend Archive reloaded, Note that no data was moved between your backends.")
+            #save change.
+            self._save_config()
+        
 
 
 def setup(bot):
+    global logger
     try:
         logger = logging.getLogger(bot.logger.name+".archiver")
         logger.setLevel(logging.DEBUG)

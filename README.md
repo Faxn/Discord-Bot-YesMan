@@ -25,9 +25,11 @@ source env/bin/activate
 
 Install requirements (Requires root if not using virtualenv).
 
-`
-pip install -r requirements.txt
-`
+`pip install -r requirements.txt`
+
+Run tests with pytest
+
+`python -m pytest`
 
 Run the bot and follow the instructions to connect it to your discord server.
 
