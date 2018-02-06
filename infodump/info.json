@@ -5,6 +5,6 @@
     "SHORT" : "",
     "DESCRIPTION" : "Commands to show developer info.",
     "TAGS" : ["developer", "debug"],
-    "REQUIREMENTS" : [],
+    "REQUIREMENTS" : ['tabulate'],
     "HIDDEN" : true
 }

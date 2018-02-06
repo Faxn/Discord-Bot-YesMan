@@ -3,7 +3,9 @@ import logging
 import sys
 
 import discord
+import discord.client as client
 from discord.ext import commands
+from tabulate import tabulate
 
 
 class InfoDumper:
@@ -48,15 +50,22 @@ class InfoDumper:
 
     @info.command(name="cogs", aliases=[], pass_context=True)
     @asyncio.coroutine
-    async def _show_cogs(self, ctx):
-        """Dumps the names and ids of every user on the current server."""
-        await self.bot.say(self.bot.cogs)
+    async def _show_cogs(self, ctx, query=None):
+        """Shows info about the installed cogs."""
+        for name in ctx.bot.cogs:
+            ctx.bot.logger.info("examining "+name)
+            cog = self.bot.cogs[name]
+            table = list()
+            for p in dir(cog):
+                if p[0:2] == "__": continue
+                table.append(p, type(cog.__getattribute__(p)), cog.__getattribute__(p))
+            ctx.bot.logger.info("%s\n" % name  + tabulate(table))
+            await self.bot.say("##%s\n" % name + tabulate(table))
 
     @info.command()
     async def user(self, user:discord.Member=None):
         await self.bot.say(user)
         await self.bot.say(json.dumps(user))
-
     
     async def on_command_error(self, exc, ctx):
         await self.bot.send_message(ctx.message.channel, str(exc))

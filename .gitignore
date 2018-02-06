@@ -2,10 +2,8 @@ config.py
 data/
 lib/
 __pycache__/
-bot.log
-debug.log
+*.log
 env/
-messages.log
 restats
 tmp.json
 .cache/
