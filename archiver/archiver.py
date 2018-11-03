@@ -10,6 +10,7 @@ from discord.http import Route
 
 #default logger in case we aren't in a bot, or the bot doesn't have a logger.
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.WARN)
 
 #tinydb archiver
 try:
@@ -243,10 +244,16 @@ class Archiver:
         # Figure out the latest and oldest message we have from channel        
         oldest_id = int(msg1['id'])
         latest_id = oldest_id
-        for msg in messages:
-            await asyncio.sleep(0)
-            oldest_id = min(latest_id, int(msg['id']))
-            latest_id = max(latest_id, int(msg['id']))
+        if hasattr(messages, "__iter__"):
+            for msg in messages:
+                await asyncio.sleep(0)
+                oldest_id = min(latest_id, int(msg['id']))
+                latest_id = max(latest_id, int(msg['id']))
+        else:
+           async for msg in messages:
+                await asyncio.sleep(0)
+                oldest_id = min(latest_id, int(msg['id']))
+                latest_id = max(latest_id, int(msg['id']))
 
         # Get new messages.
         while True:
@@ -344,15 +351,6 @@ class Archiver:
                 await ctx.bot.say("Backend Archive reloaded, Note that no data was moved between your backends.")
             #save change.
             self._save_config()
-        
-
 
 def setup(bot):
-    global logger
-    try:
-        logger = logging.getLogger(bot.logger.name+".archiver")
-        logger.setLevel(logging.DEBUG)
-    except AttributeError:
-        #the default logger at the top of the file will be used.
-        pass
     bot.add_cog(Archiver(bot))

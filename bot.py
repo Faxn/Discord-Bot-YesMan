@@ -14,10 +14,6 @@ from discord.enums import ChannelType
 from discord.ext import commands
 
 sys.path.insert(0, "lib")
-
-
-
-
     
 def on_sigint(signal, frame):
         print('We have been interrupted.')
@@ -25,27 +21,9 @@ def on_sigint(signal, frame):
 
 signal.signal(signal.SIGINT, on_sigint)    
 
-def set_logger():
-    "logger making function adapted from Red's."
-    logger = logging.getLogger("bot.py")
-    logger.setLevel(logging.INFO)
+#set up global logging.
+logger = logging.getLogger()
 
-    red_format = logging.Formatter(
-        '%(asctime)s %(levelname)s %(module)s %(funcName)s %(lineno)d: '
-        '%(message)s',
-        datefmt="[%d/%m/%Y %H:%M]")
-
-    stdout_handler = logging.StreamHandler(sys.stdout)
-    stdout_handler.setFormatter(red_format)
-    stdout_handler.setLevel(logging.DEBUG)
-    logger.addHandler(stdout_handler)
-    
-    file_handler = logging.FileHandler("bot.log", mode='w')
-    file_handler.setFormatter(red_format)
-    file_handler.setLevel(logging.DEBUG)
-    logger.addHandler(file_handler)
-
-    return logger
 
 def main(args):
     
@@ -60,14 +38,29 @@ def main(args):
     print("Starting YesMan")
     bot = commands.Bot(command_prefix='!', description="An agreeable bot.")
     
+    #Set up logging
+    logger.setLevel(logging.INFO)
+    log_format = logging.Formatter(
+        '%(asctime)s %(levelname)s %(module)s %(funcName)s %(lineno)d: '
+        '%(message)s',
+    datefmt="[%Y-%m-%d %H:%M]")
+
+    stdout_handler = logging.StreamHandler(sys.stdout)
+    stdout_handler.setFormatter(log_format)
+    stdout_handler.setLevel(logging.DEBUG)
+    logger.addHandler(stdout_handler)
+
+    file_handler = logging.FileHandler("bot.log", mode='w')
+    file_handler.setFormatter(log_format)
+    file_handler.setLevel(logging.DEBUG)
+    logger.addHandler(file_handler)
+    
     #attach logger
-    bot.logger = set_logger()
+    bot.logger = logger
     
     #set debug
     if args.debug:
         bot.logger.setLevel(logging.DEBUG)
-        bot.loop.set_debug(True)
-        logging.basicConfig(level=logging.DEBUG, filename='discord.log', filemode="w")
     
     for f in os.scandir():
         if f.is_dir() and os.path.exists(os.path.join(f.name, 'info.json')) :
@@ -89,7 +82,7 @@ def main(args):
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description='Process some integers.')
+    parser = argparse.ArgumentParser(description='Discord Bot.')
     parser.add_argument('--debug', action='store_true')
     parser.add_argument('--profile', action='store_true')
     args = parser.parse_args()
