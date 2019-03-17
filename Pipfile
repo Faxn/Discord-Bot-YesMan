@@ -1,0 +1,24 @@
+[[source]]
+name = "pypi"
+url = "https://pypi.org/simple"
+verify_ssl = true
+
+[dev-packages]
+
+[packages]
+aiohttp = "==1.0.5"
+chardet = "==3.0.4"
+markovify = "==0.7.0"
+multidict = "==3.3.2"
+ply = "==3.10"
+tinydb = "==3.7.0"
+websockets = "==3.4"
+motor = "==1.2.0"
+pytest = "==3.3.2"
+tabulate = "==0.8.2"
+async_timeout = "==2.0.0"
+"discord.py" = "==0.16.12"
+Unidecode = "==0.4.21"
+
+[requires]
+python_version = "3.7"

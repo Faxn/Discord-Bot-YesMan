@@ -7,3 +7,5 @@ env/
 stats.prof
 tmp.json
 .cache/
+.project
+.pydevproject
